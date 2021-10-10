@@ -1,12 +1,14 @@
-import requests
-import re
-import time
-import os
-import sys
 import json
 import logging
-import kafka
+import os
+import re
+import sys
 import threading
+import time
+
+import kafka
+import requests
+
 
 def poll_site(url, regex=None):
     resp = requests.get(url)

@@ -1,0 +1,16 @@
+[flake8]
+max-line-length = 80
+extend-ignore = E203, W503
+exclude = .git,.venv,.idea,.vscode,.devcontainer,assets,tests,__pycache__
+max-complexity = 50
+import-order-style = pycharm
+
+ignore =
+    # docstring: Imperative mood. When this is our biggest issue, we've won
+    D401
+    # docstring: No blank lines allowed after function docstring - crap
+    D202
+    # flake8-return: don't assign value to var if use only as return value
+    R504
+    # forward annotation made by Pydantic: no workaround yet
+    F722

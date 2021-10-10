@@ -1,0 +1,27 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+kafka-python = "*"
+psycopg2 = "*"
+requests = "*"
+
+[dev-packages]
+pytest = "*"
+isort = "*"
+black = "*"
+flake8 = "*"
+pep8-naming = "*"
+flake8-builtins = "*"
+flake8-docstrings = "*"
+flake8-isort = "*"
+flake8-return = "*"
+flake8-rst-docstrings = "*"
+
+[pipenv]
+allow_prereleases = true
+
+[requires]
+python_version = "3.9"
