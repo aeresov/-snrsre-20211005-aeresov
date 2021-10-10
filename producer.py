@@ -1,46 +1,57 @@
-import json
 import logging
-import os
 import re
-import sys
-import threading
-import time
+from typing import Optional
 
 import kafka
 import requests
+from apscheduler.schedulers.blocking import BlockingScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+
+import boilerplate
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+scheduler = BlockingScheduler()
 
 
-def poll_site(url, regex=None):
-    resp = requests.get(url)
-    match = regex and re.search(regex, resp.text)
-    return {
-        'url': url,
-        'status': resp.status_code,
-        'response_time': 0,
-        'match': match and match.group(0),
-    }
+def poll_site(
+    url: str,
+    regex: Optional[str] = None,
+) -> Optional[boilerplate.Message]:
+    try:
+        logger.info(f"requesting {url}")
+        resp = requests.get(url)
+        match = regex and re.search(regex, resp.text)
+        return boilerplate.Message(
+            url=url,
+            status=resp.status_code,
+            response_time=resp.elapsed,
+            match=match and match.group(0),
+        )
+    except requests.exceptions.RequestException as rex:
+        logger.error(rex.error.msg)
+        return None
 
 
-def send_message(producer, topic, message):
-    # Topic must exist for producer to succeed
-    print("sending", message)
-    producer.send(topic, json.dumps(message).encode('ascii'))
-    producer.flush()
-
-
-def loop(producer, topic, url, regex=None, interval=15):
-    while True:
-        send_message(producer, "webmon", poll_site(url, regex))
+def loop(
+    producer: kafka.KafkaProducer,
+    topic: str,
+    url: str,
+    regex: Optional[str] = None,
+):
+    payload = poll_site(url, regex)
+    if payload:
+        logger.info(f"sending: {payload}")
+        producer.send(topic, payload.json().encode("utf-8"))
 
 
 def main():
     producer = kafka.KafkaProducer(
-        bootstrap_servers=["kafka-22ebb710-project-0a6a.aivencloud.com:27823"],
+        bootstrap_servers=[boilerplate.KAFKA_HOST],
         security_protocol="SSL",
-        ssl_cafile="ca.pem",
-        ssl_certfile="service.cert",
-        ssl_keyfile="service.key",
+        ssl_context=boilerplate.create_ssl_context(),
         max_block_ms=5000,
+        linger_ms=0,
     )
 
     sites = [
@@ -53,7 +64,16 @@ def main():
     ]
 
     for url in sites:
-        threading.Thread(target=loop, args=(producer, "webmon", url)).start()
+        scheduler.add_job(
+            loop,
+            kwargs={
+                "producer": producer,
+                "topic": boilerplate.KAFKA_TOPIC,
+                "url": url,
+            },
+            trigger=IntervalTrigger(seconds=15),
+        )
+    scheduler.start()
 
 
 if __name__ == '__main__':

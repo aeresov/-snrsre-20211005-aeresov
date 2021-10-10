@@ -1,0 +1,130 @@
+
+
+from ssl import SSLContext
+
+import ssl
+import contextlib
+import tempfile
+
+KAFKA_CERT = """\
+-----BEGIN CERTIFICATE-----
+MIIEQDCCAqigAwIBAgIUBzgQg+djJaqeCgWJVJfE1VX6Pz0wDQYJKoZIhvcNAQEM
+BQAwOjE4MDYGA1UEAwwvNzhjMTNlMzAtOTQ3OS00YTE3LWI5ZDQtZmI4NTNkOTYx
+ZTkyIFByb2plY3QgQ0EwHhcNMjExMDEwMDQzMDQwWhcNMjQwMTA4MDQzMDQwWjA/
+MRcwFQYDVQQKDA5rYWZrYS0yN2I3NjMwYzERMA8GA1UECwwIdTB5MXo3bjAxETAP
+BgNVBAMMCGF2bmFkbWluMIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEA
+rDStUFum0PVpBk0/VFTU0fNCYSg4jW9IAn2ihGEWWjxABcYyS/HioZxmQurcXg+Q
+1etncYJwiUXV6RCd7X5VWupxkxvAsaFOr/2GCKjVCuOa7+h3GDbZeBjPCwS7RW3T
+noKX0AZx3N1BY9CRjKw0S4lhO4YxeGWe1V7xD7/SmdR0KX1tJD6J5Kt3N2ymh6dY
+td8XHf02WofqN63dDy6W9YXXgGrVx2FInkC0Gu2lidhIMRr/VSUBlK4X9xFQCNvL
+9vPcnX4EvmcfrEmfXf5NOIc1+9MoDMigacOvWmDGaaNQGej6pP9TkqbWohWfls92
+2a3UtPgZ79J1804KyONRVDh7D7obHxRJQWcKJyMh8lQUavWdyxC5TaAC62k3OcDT
+hNocf+7924rxZ4yZ4JU+vtWgBNxP61IAgZPEdueEpFKl+oHguEhzPs5htyWActR1
+cWLERFYeQcPrjljwYgth1ZtYezWcXkyUtwG4YQlulUsstneXlEcS+eV+e9ig7sPv
+AgMBAAGjOTA3MB0GA1UdDgQWBBRiucsQfY+s6rIEci2VE5kxRBj8QjAJBgNVHRME
+AjAAMAsGA1UdDwQEAwIFoDANBgkqhkiG9w0BAQwFAAOCAYEAaQjL3bHFbv8L1JFr
+YDmqEoq5ny69wVrTgRDNOFpmTynwKjBOrGWkhxOkSsQ00csfoup2pnZebpbHWBb2
+wgYFYNBccbZn4cgBxNEHy2175q7mq1SyDbnJKDO7btjsk9jVoYND4x/a5T+RtIHU
+SNXMUTThjH8a2YdZ7pp0pwb6b3t21uJZG1oYoNvnlmrDDvzWBGK2kfCF+MSGu+3k
+Df0G9kOgbFV2821xDr8WMwgSzGXhUE51Di5rRElp3nN1+Lh2HtCwotxUIY7pVe75
+ont+20/QxopBFONtIjqhIgX9fEBuKfdO5PYiZa7xoB+jz70BKACzJtmWgVauD+Ov
+US+44j+P3oUfGeK6+hqCU2n1lRf1Nx5u/yHLvjzRil0HEgcVadkYHt37MKkBxFSY
+gcSm6xG/iRa+tK2V6mIkpeRNOwiK3hpulMV2EXdpB3hHTvOnp4KvA0VWTwKIq0qK
+ygd13Co7QuwCR3AGqk3LN1NoJDT6kAfbIl3DF9155XX8dYEu
+-----END CERTIFICATE-----
+"""
+KAFKA_KEY = """\
+-----BEGIN PRIVATE KEY-----
+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
+o53szBSJcMFcRi+oSE34cU0=
+-----END PRIVATE KEY-----
+"""
+KAFKA_CA = """\
+-----BEGIN CERTIFICATE-----
+MIIEQTCCAqmgAwIBAgIUIPS0kwislBeXZ3JjBWEcg90vNdcwDQYJKoZIhvcNAQEM
+BQAwOjE4MDYGA1UEAwwvNzhjMTNlMzAtOTQ3OS00YTE3LWI5ZDQtZmI4NTNkOTYx
+ZTkyIFByb2plY3QgQ0EwHhcNMjExMDEwMDQxOTA1WhcNMzExMDA4MDQxOTA1WjA6
+MTgwNgYDVQQDDC83OGMxM2UzMC05NDc5LTRhMTctYjlkNC1mYjg1M2Q5NjFlOTIg
+UHJvamVjdCBDQTCCAaIwDQYJKoZIhvcNAQEBBQADggGPADCCAYoCggGBAM14LmAw
++GfDuD43t99ONIa6hycyqyd0XZ0mOMoGv2vlXfez8ucNiQISGmQd6GojzQGBl8Rt
+arN88GrHzqmsnya8bao3AWE8gSNR5efyfEkmO1X2pvSQBjKU/dfTCjNLe1jdYLpf
+j9uFxITV3zO4B45HJtVA07BbtERT4ssXlovHNA3E4BKbvfGn1j9Ugloss7bETWZH
+DXlmLO/RChdMIY+ooZar9U3dIWGcRG8yxAxjliOlEm/E7ytf+Vt/8/UXQBgx9FZP
+xOwTw48QFCrge1RyvXLd4eT6ZpaKSzai+7IosP71WifCiMZFCU51mwipEALP9/HV
+RgbNZrbc7ADzSTuIh4ze84MPYPOPDe0m/ryruz8rXUoKloR6BMoROylvYQ3bccYW
+ZT+4lWFoOGT6jjUcdJ2bpipYpoFDPAlZaeUDU5MZ3FAY2XfceqA3jPVkv1M7Rel+
+3pIqq6SnWmYUGGs9ata2B5vahQZmXdJMiXbTppkt5GL4/oLCzWOkRbCjzQIDAQAB
+oz8wPTAdBgNVHQ4EFgQUU4K7c7yioTZGDAQaB+IuuJBvMqYwDwYDVR0TBAgwBgEB
+/wIBADALBgNVHQ8EBAMCAQYwDQYJKoZIhvcNAQEMBQADggGBAKuB6qBvS/ouWGfP
+kmZFtrpePEBEmhfn0Dxtl36YVWu8lqc7Kg5pO1zQ8rSivxClosPYdtepEou1zOMN
+GedJL1UCvu89F4Dh0QMWU9pbA8hUBDxxA0eh9xiHMIbRHhSCGfsnyAxSEhn1KRGO
+RiSkQHsJIOugdd12jLWgU+LFIkbuWxy0/a8eKwzx/3tj2s9KacEeaVvGw2Jpsb7I
+qkIiEcz5BtLggHeSzDJbW2pJoxgFd69VShq7X1aGiDPMbUeJtHIr4grSsMpKBuQq
+W53w3tiem9b6bEHH5FIkqgzsAhxdLGP9oT0SN7zsuLYxe75XyZDSBHvjqcNPLNNw
+YV8bNLuJMbfxdhEPqYOdeiR2Ud0PyUT1kDfWDEI0uNrISH1I71S3B02KeHytIzEg
+znfi/GJVbtVhmU8JuF4ZMZE+0A49mJNkIabKXi1O7CgD0L32keyI0Iz2oOgOss5h
+Hjg5hjtyDgFENBaPVvAQj0KiAq0j7h21v/49LECAUN37hrZDNw==
+-----END CERTIFICATE-----
+"""
+
+
+def _temp_file(content: str):
+    # quickly create temp file with required content
+    file = tempfile.NamedTemporaryFile(mode="w")
+    file.write(content)
+    file.flush()
+    file.seek(0)
+    return file
+
+
+def create_context() -> SSLContext:
+    with contextlib.ExitStack() as stack:
+        cert_file = stack.enter_context(_temp_file(KAFKA_CERT))
+        key_file = stack.enter_context(_temp_file(KAFKA_KEY))
+        ca_file = stack.enter_context(_temp_file(KAFKA_CA))
+
+        ssl_context = ssl.create_default_context(
+            purpose=ssl.Purpose.CLIENT_AUTH,
+            cafile=ca_file.name,
+        )
+        ssl_context.load_cert_chain(
+            certfile=cert_file.name,
+            keyfile=key_file.name,
+        )
+        return ssl_context

@@ -1,48 +1,51 @@
-import json
+import logging
+from contextlib import closing
 
 import kafka
 import psycopg2
+from psycopg2 import sql
+
+import boilerplate
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def dbConn():
-    return psycopg2.connect(
-        "postgres://avnadmin:be9c1xH2egqw4X2@pg-1af72c59-project-0a6a.aivencloud.com:27821/defaultdb?sslmode=require"
-    )
+    return psycopg2.connect(boilerplate.PG_DSN)
 
 
-def insert_record(msg):
-    conn = dbConn()
-    url, status, response_time, match = map(
-        msg.get, ['url', 'status', 'response_time', 'match']
+def insert_record(msg: boilerplate.Message):
+    query = sql.SQL(
+        "INSERT INTO webmon_polls (url, status_code, response_time, regex_match) "  # noqa
+        "VALUES (%s, %s, %s, %s);"
     )
-    conn.cursor().execute(
-        f"""
-        insert into webmon_polls (url, status_code, response_time, regex_match)
-        values ('{url}', '{status}', '{response_time}', '{match}')
-        """
-    )
-    conn.commit()
-    conn.close()
+    try:
+        with closing(dbConn()) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    query,
+                    (
+                        str(msg.url),
+                        msg.status,
+                        msg.response_time,
+                        msg.match,
+                    ),
+                )
+                conn.commit()
+    except psycopg2.Error as pge:
+        logger.error(pge.pgerror)
 
 
 def main():
-    import ssl
-
-    ssl_context = ssl.create_default_context(
-        purpose=ssl.Purpose.CLIENT_AUTH,
-        cafile="ca.pem",
-    )
-    ssl_context.load_cert_chain(
-        certfile="service.cert",
-        keyfile="service.key",
-    )
-
     consumer = kafka.KafkaConsumer(
-        'webmon',
-        bootstrap_servers=["kafka-22ebb710-project-0a6a.aivencloud.com:27823"],
+        boilerplate.KAFKA_TOPIC,
+        bootstrap_servers=[boilerplate.KAFKA_HOST],
         security_protocol="SSL",
-        ssl_context=ssl_context,
-        value_deserializer=lambda bs: json.loads(bs.decode("utf-8")),
+        ssl_context=boilerplate.create_ssl_context(),
+        value_deserializer=lambda bs: boilerplate.Message.parse_raw(
+            bs, encoding="utf-8"
+        ),
         auto_offset_reset="earliest",
         enable_auto_commit=False,
     )
