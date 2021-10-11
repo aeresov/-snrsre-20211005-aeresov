@@ -9,6 +9,7 @@ psycopg2 = "*"
 requests = "*"
 pydantic = "*"
 apscheduler = "*"
+pyyaml = "*"
 
 [dev-packages]
 pytest = "*"
