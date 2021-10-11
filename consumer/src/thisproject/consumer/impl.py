@@ -6,17 +6,19 @@ import psycopg2
 from psycopg2 import sql
 from pydantic.error_wrappers import ValidationError
 
-import boilerplate
+import thisproject.boilerplate
+
+from .config import settings
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 def dbConn():
-    return psycopg2.connect(boilerplate.app_settings.pg_dsn)
+    return psycopg2.connect(settings.pg_dsn)
 
 
-def insert_record(msg: boilerplate.Message):
+def insert_record(msg: thisproject.boilerplate.Message):
     query = sql.SQL(
         "INSERT INTO webmon_polls (url, status_code, response_time, regex_match) "  # noqa
         "VALUES (%s, %s, %s, %s);"
@@ -38,13 +40,17 @@ def insert_record(msg: boilerplate.Message):
         logger.error(f"db insert unsuccessful: {str(pge)}")
 
 
-def main():
+def loop():
     try:
         consumer = kafka.KafkaConsumer(
-            boilerplate.app_settings.kafka_topic,
-            bootstrap_servers=[boilerplate.app_settings.kafka_host],
+            settings.kafka_topic,
+            bootstrap_servers=[settings.kafka_host],
             security_protocol="SSL",
-            ssl_context=boilerplate.create_ssl_context(),
+            ssl_context=thisproject.boilerplate.create_ssl_context(
+                settings.kafka_cert.get_secret_value(),
+                settings.kafka_key.get_secret_value(),
+                settings.kafka_ca.get_secret_value(),
+            ),
             auto_offset_reset="earliest",
             group_id="dummy",
             enable_auto_commit=True,
@@ -52,7 +58,7 @@ def main():
 
         for msg in consumer:
             try:
-                message = boilerplate.Message.parse_raw(
+                message = thisproject.boilerplate.Message.parse_raw(
                     msg.value,
                     encoding="utf-8",
                 )
@@ -62,7 +68,3 @@ def main():
 
     except Exception:
         logger.exception("unexpected error, exiting")
-
-
-if __name__ == "__main__":
-    main()

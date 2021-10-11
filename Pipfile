@@ -10,6 +10,7 @@ requests = "*"
 pydantic = "*"
 apscheduler = "*"
 pyyaml = "*"
+boilerplate = {path = "./boilerplate/dist/Boilerplate-0.0.1.tar.gz"}
 
 [dev-packages]
 pytest = "*"
@@ -22,6 +23,7 @@ flake8-docstrings = "*"
 flake8-isort = "*"
 flake8-return = "*"
 flake8-rst-docstrings = "*"
+build = "*"
 
 [pipenv]
 allow_prereleases = true

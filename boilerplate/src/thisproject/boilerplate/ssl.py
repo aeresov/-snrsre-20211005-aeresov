@@ -1,11 +1,7 @@
-
-
-from ssl import SSLContext
-
-import ssl
 import contextlib
+import ssl
 import tempfile
-from .config import settings
+from ssl import SSLContext
 
 
 def _temp_file(content: str):
@@ -17,11 +13,11 @@ def _temp_file(content: str):
     return file
 
 
-def create_context() -> SSLContext:
+def create_context(cert: str, key: str, ca: str) -> SSLContext:
     with contextlib.ExitStack() as stack:
-        cert_file = stack.enter_context(_temp_file(settings.kafka_cert.get_secret_value()))
-        key_file = stack.enter_context(_temp_file(settings.kafka_key.get_secret_value()))
-        ca_file = stack.enter_context(_temp_file(settings.kafka_ca.get_secret_value()))
+        cert_file = stack.enter_context(_temp_file(cert))
+        key_file = stack.enter_context(_temp_file(key))
+        ca_file = stack.enter_context(_temp_file(ca))
 
         ssl_context = ssl.create_default_context(
             purpose=ssl.Purpose.CLIENT_AUTH,

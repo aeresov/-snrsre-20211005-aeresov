@@ -9,7 +9,9 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from kafka.errors import KafkaTimeoutError
 
-import boilerplate
+import thisproject.boilerplate
+
+from .config import settings
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -19,12 +21,12 @@ scheduler = BlockingScheduler()
 def http_request(
     url: str,
     regex: Optional[str] = None,
-) -> Optional[boilerplate.Message]:
+) -> Optional[thisproject.boilerplate.Message]:
     try:
         logger.info(f"requesting {url}")
         resp = requests.get(url)
         match = regex and re.search(regex, resp.text)
-        return boilerplate.Message(
+        return thisproject.boilerplate.Message(
             url=url,
             status=resp.status_code,
             response_time=resp.elapsed,
@@ -50,12 +52,16 @@ def poll(
             logger.error(f"sending message unsuccessful: {str(kte)}")
 
 
-def main():
+def loop():
     try:
         producer = kafka.KafkaProducer(
-            bootstrap_servers=[boilerplate.app_settings.kafka_host],
+            bootstrap_servers=[settings.kafka_host],
             security_protocol="SSL",
-            ssl_context=boilerplate.create_ssl_context(),
+            ssl_context=thisproject.boilerplate.create_ssl_context(
+                settings.kafka_cert.get_secret_value(),
+                settings.kafka_key.get_secret_value(),
+                settings.kafka_ca.get_secret_value(),
+            ),
             max_block_ms=5000,
             linger_ms=0,
         )
@@ -74,7 +80,7 @@ def main():
                 poll,
                 kwargs={
                     "producer": producer,
-                    "topic": boilerplate.app_settings.kafka_topic,
+                    "topic": settings.kafka_topic,
                     "url": url,
                 },
                 name=url,
@@ -88,7 +94,3 @@ def main():
 
     except Exception:
         logger.exception("unexpected error, exiting")
-
-
-if __name__ == '__main__':
-    main()
